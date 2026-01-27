@@ -1,15 +1,25 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./contexts/AuthContext";
-import Header from "./components/common/Header";
-import Footer from "./components/common/Footer";
-import Loading from "./components/common/Loading";
+import { ToastProvider } from "./contexts/ToastContext";
+import Layout from "./components/layout/Layout";
+import ErrorBoundary from "./components/common/ErrorBoundary";
+import ProtectedRoute from "./components/common/ProtectedRoute";
 
-// Pages (to be created)
-// import Landing from "./pages/Landing";
-// import Login from "./pages/Login";
-// import Register from "./pages/Register";
-// import Courses from "./pages/Courses";
+// Pages
+import LandingPage from "./pages/LandingPage";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
+import UnauthorizedPage from "./pages/UnauthorizedPage";
+import DashboardPage from "./pages/DashboardPage";
+import CourseListingPage from "./pages/CourseListingPage";
+import CourseDetailPage from "./pages/CourseDetailPage";
+import CreateCoursePage from "./pages/CreateCoursePage";
+import CreateRoadmapPage from "./pages/CreateRoadmapPage";
+import MyCoursesPage from "./pages/MyCoursesPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,32 +33,62 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Router>
-          <div className="min-h-screen flex flex-col">
-            <Header />
-            <main className="flex-grow">
+      <ErrorBoundary>
+        <AuthProvider>
+          <ToastProvider>
+            <Router>
               <Routes>
-                <Route
-                  path="/"
-                  element={
-                    <div className="container mx-auto px-4 py-8">
-                      <h1 className="text-4xl font-bold mb-4">
-                        Welcome to Degap
-                      </h1>
-                      <p className="text-gray-600">
-                        Learning platform coming soon...
-                      </p>
-                    </div>
-                  }
-                />
-                {/* Routes will be added as pages are created */}
+                <Route element={<Layout />}>
+                  {/* Public Routes */}
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                  <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+                  <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
+                  <Route path="/unauthorized" element={<UnauthorizedPage />} />
+                  <Route path="/courses" element={<CourseListingPage />} />
+                  <Route path="/courses/:id" element={<CourseDetailPage />} />
+
+                  {/* Protected Routes */}
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <DashboardPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/my-courses"
+                    element={
+                      <ProtectedRoute>
+                        <MyCoursesPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/create-course"
+                    element={
+                      <ProtectedRoute>
+                        <CreateCoursePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/courses/:courseId/create-roadmap"
+                    element={
+                      <ProtectedRoute>
+                        <CreateRoadmapPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Route>
               </Routes>
-            </main>
-            <Footer />
-          </div>
-        </Router>
-      </AuthProvider>
+            </Router>
+          </ToastProvider>
+        </AuthProvider>
+      </ErrorBoundary>
     </QueryClientProvider>
   );
 }

@@ -8,6 +8,7 @@ const rateLimit = require("express-rate-limit");
 const { env } = require("./config/env");
 const { connectDB } = require("./config/database");
 const { errorHandler, notFoundHandler } = require("./middleware/error.middleware");
+const { apiLimiter } = require("./middleware/rateLimit.middleware");
 
 async function main() {
   await connectDB(env.MONGODB_URI);
@@ -23,14 +24,9 @@ async function main() {
       credentials: true,
     })
   );
-  app.use(
-    rateLimit({
-      windowMs: 15 * 60 * 1000,
-      limit: 300,
-      standardHeaders: true,
-      legacyHeaders: false,
-    })
-  );
+  
+  // Use custom rate limiter
+  app.use(apiLimiter);
 
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ extended: true }));
@@ -41,7 +37,26 @@ async function main() {
     res.json({ ok: true, service: "degap-backend", env: env.NODE_ENV });
   });
 
-  // TODO: mount routes here (auth, users, courses, roadmaps, etc.)
+  // Mount routes
+  const authRoutes = require("./routes/auth.routes");
+  const userRoutes = require("./routes/user.routes");
+  const courseRoutes = require("./routes/course.routes");
+  const roadmapRoutes = require("./routes/roadmap.routes");
+  const progressRoutes = require("./routes/progress.routes");
+  const submissionRoutes = require("./routes/submission.routes");
+  const adminRoutes = require("./routes/admin.routes");
+  const favoriteRoutes = require("./routes/favorite.routes");
+
+  app.use("/api/auth", authRoutes);
+  app.use("/api/users", userRoutes);
+  app.use("/api/courses", courseRoutes);
+  app.use("/api/roadmaps", roadmapRoutes);
+  app.use("/api/progress", progressRoutes);
+  app.use("/api/submissions", submissionRoutes);
+  app.use("/api/admin", adminRoutes);
+  app.use("/api/favorites", favoriteRoutes);
+
+  // TODO: mount other routes here
 
   app.use(notFoundHandler);
   app.use(errorHandler);
