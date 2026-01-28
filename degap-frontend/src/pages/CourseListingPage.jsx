@@ -105,7 +105,7 @@ export default function CourseListingPage() {
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Explore Courses</h1>
             <p className="text-gray-600 mt-1">Discover the best learning paths for you</p>
@@ -127,6 +127,48 @@ export default function CourseListingPage() {
             </button>
           </form>
         </div>
+
+        {/* Active filter chips */}
+        {activeFiltersCount > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Active Filters:
+            </span>
+            {category && (
+              <button
+                onClick={() => handleFilterChange({ category: "", difficulty, technology, search, sort, page: 1 })}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs border border-blue-200 hover:bg-blue-100"
+              >
+                <span>Category: {category}</span>
+                <span className="text-blue-500 text-xs">×</span>
+              </button>
+            )}
+            {difficulty && (
+              <button
+                onClick={() => handleFilterChange({ category, difficulty: "", technology, search, sort, page: 1 })}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs border border-blue-200 hover:bg-blue-100"
+              >
+                <span>Difficulty: {difficulty}</span>
+                <span className="text-blue-500 text-xs">×</span>
+              </button>
+            )}
+            {technology && (
+              <button
+                onClick={() => handleFilterChange({ category, difficulty, technology: "", search, sort, page: 1 })}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs border border-blue-200 hover:bg-blue-100"
+              >
+                <span>Technology: {technology}</span>
+                <span className="text-blue-500 text-xs">×</span>
+              </button>
+            )}
+            <button
+              onClick={() => setSearchParams({})}
+              className="ml-1 text-xs text-gray-600 hover:text-gray-900 underline"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
 
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Mobile Filter Toggle */}

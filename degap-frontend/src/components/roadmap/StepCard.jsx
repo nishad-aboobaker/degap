@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDownIcon, ChevronUpIcon, ClockIcon, BoltIcon } from '@heroicons/react/24/outline';
 import ResourceLink from './ResourceLink';
 
-export default function StepCard({ step, isLast }) {
+export default function StepCard({ step, isLast, isCompleted = false, onToggle }) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const {
@@ -28,9 +28,19 @@ export default function StepCard({ step, isLast }) {
     <div className="flex gap-4 relative">
       {/* Timeline Connector */}
       <div className="flex flex-col items-center">
-        <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-sm z-10 shrink-0">
-          {stepNumber}
-        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm z-10 shrink-0 border-2 transition-colors ${
+            isCompleted
+              ? 'bg-green-500 border-green-600 text-white'
+              : 'bg-white border-blue-300 text-blue-600'
+          }`}
+          aria-pressed={isCompleted}
+          aria-label={isCompleted ? `Mark step ${stepNumber} as incomplete` : `Mark step ${stepNumber} as complete`}
+        >
+          {isCompleted ? '✓' : stepNumber}
+        </button>
         {!isLast && (
           <div className="w-0.5 flex-grow bg-gray-200 my-2 absolute top-8 bottom-0 -z-0"></div>
         )}
@@ -38,7 +48,11 @@ export default function StepCard({ step, isLast }) {
 
       {/* Content Card */}
       <div className="flex-grow pb-8">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-shadow hover:shadow-md">
+        <div
+          className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-shadow hover:shadow-md ${
+            isCompleted ? "border-green-200 ring-1 ring-green-100" : "border-gray-200"
+          }`}
+        >
           {/* Header */}
           <button 
             onClick={() => setIsExpanded(!isExpanded)}
@@ -54,8 +68,17 @@ export default function StepCard({ step, isLast }) {
                   </span>
                 )}
                 {difficultyLevel && (
-                  <span className={`text-xs px-2 py-0.5 rounded border ${getDifficultyColor(difficultyLevel)} capitalize`}>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded border ${getDifficultyColor(
+                      difficultyLevel
+                    )} capitalize`}
+                  >
                     {difficultyLevel}
+                  </span>
+                )}
+                {isCompleted && (
+                  <span className="text-xs px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200">
+                    Completed
                   </span>
                 )}
               </div>

@@ -435,6 +435,63 @@ async function getCurrentUser(req, res, next) {
     }
 }
 
+/**
+ * @route   GET /api/auth/google/callback
+ * @route   GET /api/auth/github/callback
+ * @desc    Common OAuth callback handler – issues JWT cookies
+ * @access  Public (invoked after Passport OAuth success)
+ */
+async function loginWithOAuth(req, res, next) {
+    try {
+        const user = req.user;
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                error: {
+                    code: "OAUTH_FAILED",
+                    message: "OAuth authentication failed",
+                },
+            });
+        }
+
+        const accessToken = generateAccessToken(user.toJWTPayload());
+        const refreshToken = generateRefreshToken({ id: user._id });
+
+        const hashedRefreshToken = hashToken(refreshToken);
+        user.refreshTokens.push({
+            token: hashedRefreshToken,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        });
+
+        if (user.refreshTokens.length > 5) {
+            user.refreshTokens.shift();
+        }
+
+        await user.save();
+
+        res.cookie("accessToken", accessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+            maxAge: 15 * 60 * 1000,
+        });
+
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        // Redirect back to frontend after successful OAuth login
+        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        res.redirect(frontendUrl);
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     register,
     login,
@@ -444,4 +501,5 @@ module.exports = {
     verifyEmail,
     refreshToken,
     getCurrentUser,
+    loginWithOAuth,
 };

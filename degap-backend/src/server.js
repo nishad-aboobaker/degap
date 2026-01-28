@@ -9,6 +9,7 @@ const { env } = require("./config/env");
 const { connectDB } = require("./config/database");
 const { errorHandler, notFoundHandler } = require("./middleware/error.middleware");
 const { apiLimiter } = require("./middleware/rateLimit.middleware");
+const passport = require("./config/passport");
 
 async function main() {
   await connectDB(env.MONGODB_URI);
@@ -20,7 +21,10 @@ async function main() {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.CORS_ORIGIN,
+      origin:
+        env.NODE_ENV === "production"
+          ? env.CORS_ORIGIN
+          : true, // allow all origins in development to avoid local CORS issues
       credentials: true,
     })
   );
@@ -32,6 +36,9 @@ async function main() {
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
   app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
+
+  // Initialize Passport for OAuth flows (sessionless)
+  app.use(passport.initialize());
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, service: "degap-backend", env: env.NODE_ENV });

@@ -18,8 +18,10 @@ import DashboardPage from "./pages/DashboardPage";
 import CourseListingPage from "./pages/CourseListingPage";
 import CourseDetailPage from "./pages/CourseDetailPage";
 import CreateCoursePage from "./pages/CreateCoursePage";
+import EditCoursePage from "./pages/EditCoursePage";
 import CreateRoadmapPage from "./pages/CreateRoadmapPage";
 import MyCoursesPage from "./pages/MyCoursesPage";
+import ProfilePage from "./pages/ProfilePage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -68,10 +70,26 @@ function App() {
                     }
                   />
                   <Route
+                    path="/profile"
+                    element={
+                      <ProtectedRoute>
+                        <ProfilePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/create-course"
                     element={
                       <ProtectedRoute>
                         <CreateCoursePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/courses/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <EditCoursePage />
                       </ProtectedRoute>
                     }
                   />

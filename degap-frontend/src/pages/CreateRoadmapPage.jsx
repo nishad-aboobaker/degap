@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import courseService from "../services/course.service";
 import roadmapService from "../services/roadmap.service";
 import { useToast } from "../hooks/useToast";
@@ -16,6 +17,12 @@ const resourceSchema = z.object({
   description: z.string().optional(),
 });
 
+const exerciseSchema = z.object({
+  title: z.string().min(3, "Exercise title is required"),
+  description: z.string().optional(),
+  url: z.string().url("Valid URL is required").optional().or(z.literal("")),
+});
+
 const stepSchema = z.object({
   stepNumber: z.number().min(1),
   title: z.string().min(3, "Step title is required"),
@@ -23,6 +30,7 @@ const stepSchema = z.object({
   estimatedTime: z.number().min(0, "Time must be positive").optional(),
   difficultyLevel: z.enum(["beginner", "intermediate", "advanced"]),
   resources: z.array(resourceSchema).min(1, "At least one resource is required"),
+  exercises: z.array(exerciseSchema).optional().default([]),
 });
 
 const roadmapSchema = z.object({
@@ -63,6 +71,7 @@ export default function CreateRoadmapPage() {
               url: "",
             },
           ],
+          exercises: [],
         },
       ],
     },
@@ -165,6 +174,80 @@ export default function CreateRoadmapPage() {
     );
   };
 
+  const ExerciseFields = ({ stepIndex, control, register, errors }) => {
+    const { fields, append, remove } = useFieldArray({
+      control,
+      name: `steps.${stepIndex}.exercises`,
+    });
+
+    return (
+      <div className="mt-6 space-y-3">
+        <label className="block text-sm font-medium text-gray-700">
+          Exercises & projects <span className="text-gray-400 text-xs">(optional)</span>
+        </label>
+        {fields.map((field, index) => (
+          <div
+            key={field.id}
+            className="flex gap-3 items-start bg-gray-50 p-3 rounded-md border border-gray-200"
+          >
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <input
+                {...register(`steps.${stepIndex}.exercises.${index}.title`)}
+                placeholder="Exercise title"
+                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              />
+              <input
+                {...register(`steps.${stepIndex}.exercises.${index}.url`)}
+                placeholder="Optional URL"
+                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              />
+              <input
+                {...register(`steps.${stepIndex}.exercises.${index}.description`)}
+                placeholder="Short description (optional)"
+                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => remove(index)}
+              className="text-red-500 hover:text-red-700 p-1"
+              title="Remove Exercise"
+            >
+              <TrashIcon className="h-5 w-5" />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => append({ title: "", description: "", url: "" })}
+          className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+        >
+          <PlusIcon className="h-4 w-4 mr-1" /> Add Exercise
+        </button>
+        {errors.steps?.[stepIndex]?.exercises && (
+          <p className="text-sm text-red-600">
+            {errors.steps[stepIndex].exercises.message}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  const handleReorderSteps = (result) => {
+    if (!result.destination) return;
+    const fromIndex = result.source.index;
+    const toIndex = result.destination.index;
+    if (fromIndex === toIndex) return;
+
+    const updated = Array.from(stepFields);
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+
+    // react-hook-form's useFieldArray has a move helper, but here we rely
+    // on the internal update via setValue through re-registering stepNumber.
+    // After reordering, stepNumber is recomputed from index below.
+  };
+
   if (loading) return <div className="p-8 text-center">Loading...</div>;
 
   return (
@@ -209,7 +292,7 @@ export default function CreateRoadmapPage() {
 
           {/* Steps */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <h2 className="text-xl font-semibold text-gray-900">Roadmap Steps</h2>
               <button
                 type="button"
@@ -221,6 +304,7 @@ export default function CreateRoadmapPage() {
                     estimatedTime: 0,
                     difficultyLevel: "beginner",
                     resources: [{ type: "article", title: "", url: "" }],
+                    exercises: [],
                   })
                 }
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
@@ -229,75 +313,129 @@ export default function CreateRoadmapPage() {
               </button>
             </div>
 
-            {stepFields.map((field, index) => (
-              <div key={field.id} className="bg-white shadow rounded-lg p-6 border border-gray-200">
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">Step {index + 1}</h3>
-                  {stepFields.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeStep(index)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <TrashIcon className="h-5 w-5" />
-                    </button>
-                  )}
-                </div>
+            <DragDropContext onDragEnd={handleReorderSteps}>
+              <Droppable droppableId="steps">
+                {(provided) => (
+                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-4">
+                    {stepFields.map((field, index) => (
+                      <Draggable key={field.id} draggableId={field.id} index={index}>
+                        {(draggableProvided, snapshot) => (
+                          <div
+                            ref={draggableProvided.innerRef}
+                            {...draggableProvided.draggableProps}
+                            className={`bg-white shadow rounded-lg p-6 border border-gray-200 ${
+                              snapshot.isDragging ? "ring-2 ring-blue-200 shadow-lg" : ""
+                            }`}
+                          >
+                            <div className="flex justify-between items-start mb-4">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  {...draggableProvided.dragHandleProps}
+                                  className="cursor-grab text-gray-400 hover:text-gray-600"
+                                  title="Drag to reorder"
+                                >
+                                  ⋮⋮
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900">
+                                  Step {index + 1}
+                                </h3>
+                              </div>
+                              {stepFields.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeStep(index)}
+                                  className="text-red-500 hover:text-red-700"
+                                >
+                                  <TrashIcon className="h-5 w-5" />
+                                </button>
+                              )}
+                            </div>
 
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                    <input type="hidden" {...register(`steps.${index}.stepNumber`, { value: index + 1 })} />
-                  
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Step Title</label>
-                    <input
-                      {...register(`steps.${index}.title`)}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3 border"
-                      placeholder="e.g. HTML Basics"
-                    />
-                    {errors.steps?.[index]?.title && (
-                      <p className="mt-1 text-sm text-red-600">{errors.steps[index].title.message}</p>
-                    )}
+                            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                              <input
+                                type="hidden"
+                                {...register(`steps.${index}.stepNumber`, {
+                                  value: index + 1,
+                                })}
+                              />
+
+                              <div className="col-span-2">
+                                <label className="block text-sm font-medium text-gray-700">
+                                  Step Title
+                                </label>
+                                <input
+                                  {...register(`steps.${index}.title`)}
+                                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3 border"
+                                  placeholder="e.g. HTML Basics"
+                                />
+                                {errors.steps?.[index]?.title && (
+                                  <p className="mt-1 text-sm text-red-600">
+                                    {errors.steps[index].title.message}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="col-span-2">
+                                <label className="block text-sm font-medium text-gray-700">
+                                  Description
+                                </label>
+                                <textarea
+                                  {...register(`steps.${index}.description`)}
+                                  rows={2}
+                                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3 border"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700">
+                                  Difficulty
+                                </label>
+                                <select
+                                  {...register(`steps.${index}.difficultyLevel`)}
+                                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3 border"
+                                >
+                                  <option value="beginner">Beginner</option>
+                                  <option value="intermediate">Intermediate</option>
+                                  <option value="advanced">Advanced</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700">
+                                  Est. Time (hours)
+                                </label>
+                                <input
+                                  type="number"
+                                  {...register(`steps.${index}.estimatedTime`, {
+                                    valueAsNumber: true,
+                                  })}
+                                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3 border"
+                                />
+                              </div>
+                            </div>
+
+                            <ResourceFields
+                              stepIndex={index}
+                              control={control}
+                              register={register}
+                              errors={errors}
+                            />
+
+                            <ExerciseFields
+                              stepIndex={index}
+                              control={control}
+                              register={register}
+                              errors={errors}
+                            />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
                   </div>
-
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Description</label>
-                    <textarea
-                      {...register(`steps.${index}.description`)}
-                      rows={2}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3 border"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Difficulty</label>
-                    <select
-                      {...register(`steps.${index}.difficultyLevel`)}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3 border"
-                    >
-                      <option value="beginner">Beginner</option>
-                      <option value="intermediate">Intermediate</option>
-                      <option value="advanced">Advanced</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Est. Time (hours)</label>
-                    <input
-                      type="number"
-                      {...register(`steps.${index}.estimatedTime`, { valueAsNumber: true })}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3 border"
-                    />
-                  </div>
-                </div>
-
-                <ResourceFields
-                  stepIndex={index}
-                  control={control}
-                  register={register}
-                  errors={errors}
-                />
-              </div>
-            ))}
+                )}
+              </Droppable>
+            </DragDropContext>
             {errors.steps && typeof errors.steps.message === 'string' && (
                 <p className="text-red-600 text-center">{errors.steps.message}</p>
             )}

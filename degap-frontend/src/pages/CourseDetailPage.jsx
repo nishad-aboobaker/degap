@@ -95,6 +95,76 @@ export default function CourseDetailPage() {
     }
   };
 
+  const handleToggleStep = async ({ stepNumber, completed }) => {
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: { pathname: `/courses/${id}` } } });
+      return;
+    }
+
+    const activeRoadmapId = (activeRoadmap && activeRoadmap._id) || progress?.roadmapId;
+    if (!activeRoadmapId) return;
+
+    try {
+      const res = await progressService.updateStep({
+        courseId: id,
+        roadmapId: activeRoadmapId,
+        stepNumber,
+        completed,
+      });
+      setProgress(res.data);
+    } catch (err) {
+      console.error(err);
+      addToast("Failed to update step progress", "error");
+    }
+  };
+
+  const handleCompleteCourse = async () => {
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: { pathname: `/courses/${id}` } } });
+      return;
+    }
+
+    const roadmapId = (activeRoadmap && activeRoadmap._id) || progress?.roadmapId;
+    const steps = activeRoadmap?.steps || [];
+
+    if (!roadmapId || steps.length === 0) {
+      addToast("This course does not have a roadmap to complete yet.", "info");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+
+      const stepNumbers = steps.map((s) => s.stepNumber);
+
+      await Promise.all(
+        stepNumbers.map((stepNumber) =>
+          progressService.updateStep({
+            courseId: id,
+            roadmapId,
+            stepNumber,
+            completed: true,
+          })
+        )
+      );
+
+      // Refresh overall progress from the server
+      const refreshed = await progressService
+        .getByCourseId(id)
+        .catch(() => null);
+      if (refreshed?.data) {
+        setProgress(refreshed.data);
+      }
+
+      addToast("Course marked as completed.", "success");
+    } catch (err) {
+      console.error(err);
+      addToast("Failed to mark course as completed", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleFavorite = async () => {
     if (!isAuthenticated) {
       navigate("/login", { state: { from: { pathname: `/courses/${id}` } } });
@@ -170,6 +240,7 @@ export default function CourseDetailPage() {
   } = course;
 
   const activeRoadmap = roadmaps?.[0] || course.roadmap;
+  const isCourseComplete = progress?.progressPercentage === 100;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -231,7 +302,7 @@ export default function CourseDetailPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3 justify-end">
                   <button 
                     onClick={handleShare}
                     className="p-2 text-gray-500 hover:text-blue-600 transition-colors rounded-full hover:bg-blue-50 border border-gray-200"
@@ -254,11 +325,11 @@ export default function CourseDetailPage() {
                         <HeartOutline className="w-6 h-6" />
                     )}
                   </button>
-                   <button 
+                  <button
                     onClick={handleStartCourse}
                     disabled={actionLoading}
                     className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
-                   >
+                  >
                     {actionLoading ? (
                         <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                     ) : progress ? (
@@ -285,7 +356,13 @@ export default function CourseDetailPage() {
            <div className="md:col-span-2 space-y-8" id="roadmap-section">
               <section>
                  {activeRoadmap ? (
-                    <RoadmapViewer roadmap={activeRoadmap} />
+                    <RoadmapViewer
+                      roadmap={activeRoadmap}
+                      progress={progress}
+                      onToggleStep={handleToggleStep}
+                      onCompleteCourse={handleCompleteCourse}
+                      isCourseComplete={isCourseComplete}
+                    />
                  ) : (
                     <div className="bg-white rounded-xl shadow-sm p-8 text-center">
                        <p className="text-gray-500 italic mb-4">No roadmap details available yet.</p>

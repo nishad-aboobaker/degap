@@ -80,7 +80,13 @@ async function createRoadmap(req, res, next) {
         }
 
         // Check ownership
-        if (course.createdBy.toString() !== req.user.id && req.user.role !== "admin") {
+        // console.log("Debug Roadmap Auth:", { 
+        //     courseCreator: course.createdBy.toString(), 
+        //     userId: req.user.id.toString(),
+        //     match: course.createdBy.toString() === req.user.id.toString()
+        // });
+        
+        if (course.createdBy.toString() !== req.user.id.toString() && req.user.role !== "admin") {
             return res.status(403).json({
                 success: false,
                 error: {
@@ -137,7 +143,7 @@ async function updateRoadmap(req, res, next) {
             });
         }
 
-        if (course.createdBy.toString() !== req.user.id && req.user.role !== "admin") {
+        if (course.createdBy.toString() !== req.user.id.toString() && req.user.role !== "admin") {
             return res.status(403).json({
                 success: false,
                 error: {
@@ -183,7 +189,7 @@ async function deleteRoadmap(req, res, next) {
         // Verify ownership via course
         const course = await Course.findById(roadmap.courseId);
         // If course is deleted, we might still want to delete the roadmap by admin
-        if (course && course.createdBy.toString() !== req.user.id && req.user.role !== "admin") {
+        if (course && course.createdBy.toString() !== req.user.id.toString() && req.user.role !== "admin") {
             return res.status(403).json({
                 success: false,
                 error: {

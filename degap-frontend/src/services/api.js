@@ -90,6 +90,11 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
 
+      // Skip global error for initial /auth/me checks (expected 401 when logged out)
+      if (originalRequest.url.endsWith("/auth/me")) {
+        return Promise.reject(error);
+      }
+
       // Check for suppression flag
       if (originalRequest.suppressGlobalError) {
         return Promise.reject(error);

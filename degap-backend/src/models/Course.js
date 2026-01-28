@@ -24,7 +24,15 @@ const courseSchema = new mongoose.Schema(
             trim: true,
             index: true,
         },
+        // Legacy field name for technology stack; kept for backward compatibility
         technologies: [
+            {
+                type: String,
+                trim: true,
+            },
+        ],
+        // Canonical technology stack field per DESIGN/PRD
+        technologyStack: [
             {
                 type: String,
                 trim: true,
@@ -45,13 +53,26 @@ const courseSchema = new mongoose.Schema(
             type: Number,
             min: [0, "Duration must be positive"],
         },
+        tags: [
+            {
+                type: String,
+                trim: true,
+            },
+        ],
         thumbnail: {
             type: String,
             default: null,
         },
         status: {
             type: String,
-            enum: ["draft", "submitted", "approved", "rejected"],
+            enum: [
+                "draft",
+                "submitted",
+                "under_review",
+                "approved",
+                "rejected",
+                "taken_down",
+            ],
             default: "draft",
             index: true,
         },
@@ -68,6 +89,26 @@ const courseSchema = new mongoose.Schema(
         approvedAt: {
             type: Date,
         },
+        rejectionReason: {
+            type: String,
+        },
+        // Co-ownership support per DESIGN/PRD
+        coOwners: [
+            {
+                userId: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "User",
+                },
+                addedAt: {
+                    type: Date,
+                    default: Date.now,
+                },
+                addedBy: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "User",
+                },
+            },
+        ],
         viewCount: {
             type: Number,
             default: 0,
@@ -87,6 +128,8 @@ const courseSchema = new mongoose.Schema(
 // Indexes for search and filtering
 courseSchema.index({ title: "text", description: "text" });
 courseSchema.index({ technologies: 1 });
+courseSchema.index({ technologyStack: 1 });
+courseSchema.index({ category: 1, status: 1 });
 
 // Create course slug from the title
 courseSchema.pre("save", function (next) {

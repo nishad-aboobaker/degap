@@ -140,10 +140,10 @@ async function approveSubmission(req, res, next) {
 
         await submission.save();
 
-        // Publish the course
-        await Course.findByIdAndUpdate(submission.courseId, { status: "published" });
+        // Publish the course using canonical status enum
+        await Course.findByIdAndUpdate(submission.courseId, { status: "approved" });
 
-        res.json({ success: true, message: "Submission approved and course published", data: submission });
+        res.json({ success: true, message: "Submission approved and course approved", data: submission });
     } catch (error) {
         next(error);
     }
@@ -249,7 +249,7 @@ async function takedownCourse(req, res, next) {
     try {
         const course = await Course.findByIdAndUpdate(
             req.params.id,
-            { status: "draft" }, // Revert to draft or specific 'suspended' status
+            { status: "taken_down" },
             { new: true }
         );
 
@@ -276,7 +276,7 @@ async function getAnalytics(req, res, next) {
     try {
         const totalUsers = await User.countDocuments();
         const totalCourses = await Course.countDocuments();
-        const publishedCourses = await Course.countDocuments({ status: "published" });
+        const publishedCourses = await Course.countDocuments({ status: "approved" });
         const pendingSubmissions = await Submission.countDocuments({ status: "submitted" });
         
         res.json({

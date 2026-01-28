@@ -360,9 +360,9 @@ db.users.deleteMany({})
 ## 🎯 Next Steps
 
 1. ✅ Development environment is set up
-2. 🔄 Start implementing authentication (Phase 2)
-3. 🔄 Create database models (Phase 3)
-4. 🔄 Build API endpoints (Phase 4)
+2. ✅ Core authentication, database models, and initial APIs implemented
+3. ✅ Course browsing, roadmap viewing, progress tracking basics, and course creation UI implemented
+4. 🔄 Continue aligning features with `PRD.md`, `DESIGN.md`, and `TODO.md` (see `GAP_MATRIX.md` for current gaps)
 
 ---
 

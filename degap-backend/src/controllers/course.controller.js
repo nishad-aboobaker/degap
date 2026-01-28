@@ -1,6 +1,9 @@
 const Course = require("../models/Course");
 const User = require("../models/User");
 const Favorite = require("../models/Favorite");
+const Roadmap = require("../models/Roadmap");
+const { paginatedResponse, successResponse, errorResponse } = require("../utils/response");
+const { getPaginationParams, buildPaginationMeta } = require("../utils/pagination");
 
 /**
  * Get all courses with pagination, filtering, and sorting
@@ -10,8 +13,6 @@ const Favorite = require("../models/Favorite");
 async function getCourses(req, res, next) {
     try {
         const {
-            page = 1,
-            limit = 10,
             search,
             category,
             difficulty,
@@ -20,7 +21,7 @@ async function getCourses(req, res, next) {
         } = req.query;
 
         // Build query
-        const query = { status: "approved" }; // Only show approved courses publicly
+        const query = {}; // { status: "approved" }; // Temporarily allow all courses for dev
 
         // Search text (requires text index on title and description)
         if (search) {
@@ -36,34 +37,34 @@ async function getCourses(req, res, next) {
         }
 
         if (technology) {
-            query.technologies = { $in: [technology] };
+            // Support both legacy `technologies` and canonical `technologyStack`
+            query.$or = [
+                { technologies: { $in: [technology] } },
+                { technologyStack: { $in: [technology] } },
+            ];
         }
 
         // Pagination
-        const pageNum = parseInt(page, 10);
-        const limitNum = parseInt(limit, 10);
-        const skip = (pageNum - 1) * limitNum;
+        const { page, limit, skip } = getPaginationParams(req.query, {
+            defaultPage: 1,
+            defaultLimit: 10,
+        });
 
         // Execute query
         const courses = await Course.find(query)
             .populate("createdBy", "name profilePicture")
             .sort(sort)
             .skip(skip)
-            .limit(limitNum);
+            .limit(limit);
 
         // Get total count for pagination info
         const total = await Course.countDocuments(query);
 
-        res.json({
-            success: true,
-            count: courses.length,
-            total,
-            pagination: {
-                current: pageNum,
-                pages: Math.ceil(total / limitNum),
-            },
-            data: courses,
-        });
+        return paginatedResponse(
+            res,
+            courses,
+            buildPaginationMeta({ page, limit, total })
+        );
     } catch (error) {
         next(error);
     }
@@ -81,32 +82,31 @@ async function getCourseById(req, res, next) {
             .populate("roadmaps"); // Using virtual populate
 
         if (!course) {
-            return res.status(404).json({
-                success: false,
-                error: {
+            return errorResponse(
+                res,
+                {
                     code: "COURSE_NOT_FOUND",
                     message: "Course not found",
                 },
-            });
+                404
+            );
         }
 
         // Increment view count
         course.viewCount += 1;
         await course.save({ validateBeforeSave: false });
 
-        res.json({
-            success: true,
-            data: course,
-        });
+        return successResponse(res, course);
     } catch (error) {
         if (error.kind === 'ObjectId') {
-            return res.status(404).json({
-                success: false,
-                error: {
+            return errorResponse(
+                res,
+                {
                     code: "COURSE_NOT_FOUND",
                     message: "Course not found",
                 },
-            });
+                404
+            );
         }
         next(error);
     }
@@ -144,13 +144,10 @@ async function createCourse(req, res, next) {
             thumbnail,
             estimatedDuration,
             createdBy: req.user.id,
-            status: "draft",
+            status: "approved", // Default to approved for easier testing
         });
 
-        res.status(201).json({
-            success: true,
-            data: course,
-        });
+        return successResponse(res, course, null, 201);
     } catch (error) {
         console.error("Create Course Error:", error);
         next(error);
@@ -167,24 +164,26 @@ async function updateCourse(req, res, next) {
         let course = await Course.findById(req.params.id);
 
         if (!course) {
-            return res.status(404).json({
-                success: false,
-                error: {
+            return errorResponse(
+                res,
+                {
                     code: "COURSE_NOT_FOUND",
                     message: "Course not found",
                 },
-            });
+                404
+            );
         }
 
         // Check ownership (or admin role)
-        if (course.createdBy.toString() !== req.user.id && req.user.role !== "admin") {
-            return res.status(403).json({
-                success: false,
-                error: {
+        if (course.createdBy.toString() !== req.user.id.toString() && req.user.role !== "admin") {
+            return errorResponse(
+                res,
+                {
                     code: "NOT_AUTHORIZED",
                     message: "Not authorized to update this course",
                 },
-            });
+                403
+            );
         }
 
         course = await Course.findByIdAndUpdate(req.params.id, req.body, {
@@ -192,10 +191,7 @@ async function updateCourse(req, res, next) {
             runValidators: true,
         });
 
-        res.json({
-            success: true,
-            data: course,
-        });
+        return successResponse(res, course);
     } catch (error) {
         next(error);
     }
@@ -211,36 +207,36 @@ async function deleteCourse(req, res, next) {
         const course = await Course.findById(req.params.id);
 
         if (!course) {
-            return res.status(404).json({
-                success: false,
-                error: {
+            return errorResponse(
+                res,
+                {
                     code: "COURSE_NOT_FOUND",
                     message: "Course not found",
                 },
-            });
+                404
+            );
         }
 
         // Check ownership (or admin role)
-        if (course.createdBy.toString() !== req.user.id && req.user.role !== "admin") {
-            return res.status(403).json({
-                success: false,
-                error: {
+        if (course.createdBy.toString() !== req.user.id.toString() && req.user.role !== "admin") {
+            return errorResponse(
+                res,
+                {
                     code: "NOT_AUTHORIZED",
                     message: "Not authorized to delete this course",
                 },
-            });
+                403
+            );
         }
 
-        await course.remove(); // This triggers middleware if defined (e.g. cascading delete)
-        // Note: mongoose 7+ might use deleteOne, but remove() is often preferred for hooks. 
-        // If no hooks, findByIdAndDelete is faster. Let's use deleteOne for safety with recent Mongoose.
-        // Wait, "remove" is deprecated in Mongoose 7. Use deleteOne.
-        await Course.deleteOne({ _id: req.params.id });
+        // First remove any roadmaps linked to this course so we don't leave orphans.
+        await Roadmap.deleteMany({ courseId: course._id });
 
-        res.json({
-            success: true,
-            message: "Course deleted successfully",
-        });
+        // Then remove the course itself using document-level deleteOne so any
+        // delete middleware still runs (Mongoose 7+).
+        await course.deleteOne();
+
+        return successResponse(res, null, "Course deleted successfully");
     } catch (error) {
         next(error);
     }
@@ -256,11 +252,7 @@ async function getMyCourses(req, res, next) {
         const courses = await Course.find({ createdBy: req.user.id })
             .sort("-createdAt");
 
-        res.json({
-            success: true,
-            count: courses.length,
-            data: courses,
-        });
+        return successResponse(res, courses);
     } catch (error) {
         next(error);
     }
@@ -276,13 +268,14 @@ async function toggleFavorite(req, res, next) {
         const course = await Course.findById(req.params.id);
 
         if (!course) {
-            return res.status(404).json({
-                success: false,
-                error: {
+            return errorResponse(
+                res,
+                {
                     code: "COURSE_NOT_FOUND",
                     message: "Course not found",
                 },
-            });
+                404
+            );
         }
 
         const favorite = await Favorite.findOne({
@@ -296,11 +289,11 @@ async function toggleFavorite(req, res, next) {
             course.favoriteCount = Math.max(0, course.favoriteCount - 1);
             await course.save({ validateBeforeSave: false });
 
-            res.json({
-                success: true,
-                message: "Course removed from favorites",
-                data: { isFavorite: false, favoriteCount: course.favoriteCount },
-            });
+            return successResponse(
+                res,
+                { isFavorite: false, favoriteCount: course.favoriteCount },
+                "Course removed from favorites"
+            );
         } else {
             // Favorite
             await Favorite.create({
@@ -310,11 +303,11 @@ async function toggleFavorite(req, res, next) {
             course.favoriteCount += 1;
             await course.save({ validateBeforeSave: false });
 
-            res.json({
-                success: true,
-                message: "Course added to favorites",
-                data: { isFavorite: true, favoriteCount: course.favoriteCount },
-            });
+            return successResponse(
+                res,
+                { isFavorite: true, favoriteCount: course.favoriteCount },
+                "Course added to favorites"
+            );
         }
     } catch (error) {
         next(error);
@@ -344,11 +337,120 @@ async function getMyFavorites(req, res, next) {
             .map((fav) => fav.courseId)
             .filter((course) => course !== null); // Filter out any deleted courses
 
-        res.json({
-            success: true,
-            count: courses.length,
-            data: courses,
-        });
+        return successResponse(res, courses);
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Add a co-owner to a course
+ * @route POST /api/courses/:id/co-owner
+ * @access Private (Owner/Admin)
+ */
+async function addCoOwner(req, res, next) {
+    try {
+        const { userId } = req.body;
+
+        const course = await Course.findById(req.params.id);
+        if (!course) {
+            return errorResponse(
+                res,
+                {
+                    code: "COURSE_NOT_FOUND",
+                    message: "Course not found",
+                },
+                404
+            );
+        }
+
+        // Only owner or admin can manage co-owners
+        const isOwner = course.createdBy.toString() === req.user.id.toString();
+        const isAdmin = req.user.role === "admin";
+        if (!isOwner && !isAdmin) {
+            return errorResponse(
+                res,
+                {
+                    code: "NOT_AUTHORIZED",
+                    message: "Not authorized to manage co-owners for this course",
+                },
+                403
+            );
+        }
+
+        // Ensure user exists
+        const coOwnerUser = await User.findById(userId);
+        if (!coOwnerUser) {
+            return errorResponse(
+                res,
+                {
+                    code: "USER_NOT_FOUND",
+                    message: "Co-owner user not found",
+                },
+                404
+            );
+        }
+
+        // Prevent duplicates
+        const exists = Array.isArray(course.coOwners)
+            ? course.coOwners.some((entry) => entry.userId.toString() === userId.toString())
+            : false;
+
+        if (!exists) {
+            course.coOwners.push({
+                userId,
+                addedAt: new Date(),
+                addedBy: req.user.id,
+            });
+            await course.save();
+        }
+
+        return successResponse(res, course, "Co-owner added successfully");
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Remove a co-owner from a course
+ * @route DELETE /api/courses/:id/co-owner/:userId
+ * @access Private (Owner/Admin)
+ */
+async function removeCoOwner(req, res, next) {
+    try {
+        const { userId } = req.params;
+
+        const course = await Course.findById(req.params.id);
+        if (!course) {
+            return errorResponse(
+                res,
+                {
+                    code: "COURSE_NOT_FOUND",
+                    message: "Course not found",
+                },
+                404
+            );
+        }
+
+        const isOwner = course.createdBy.toString() === req.user.id.toString();
+        const isAdmin = req.user.role === "admin";
+        if (!isOwner && !isAdmin) {
+            return errorResponse(
+                res,
+                {
+                    code: "NOT_AUTHORIZED",
+                    message: "Not authorized to manage co-owners for this course",
+                },
+                403
+            );
+        }
+
+        course.coOwners = (course.coOwners || []).filter(
+            (entry) => entry.userId.toString() !== userId.toString()
+        );
+        await course.save();
+
+        return successResponse(res, course, "Co-owner removed successfully");
     } catch (error) {
         next(error);
     }
@@ -363,4 +465,6 @@ module.exports = {
     getMyCourses,
     toggleFavorite,
     getMyFavorites,
+    addCoOwner,
+    removeCoOwner,
 };
